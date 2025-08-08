@@ -1,0 +1,27 @@
+{
+    "name": "react-data-cache",
+    "version": "1.0.0",
+    "description": "Lightweight React hook for caching, prefetching, and refetching data with stale-time control.",
+    "main": "dist/index.js",
+    "module": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "scripts": {
+        "build": "tsc"
+    },
+    "keywords": [
+        "react",
+        "data-fetching",
+        "cache",
+        "prefetch",
+        "typescript"
+    ],
+    "author": "Ahmed Owais",
+    "license": "MIT",
+    "peerDependencies": {
+        "react": ">=18.0.0"
+    },
+    "devDependencies": {
+        "@types/react": "^19.1.9",
+        "typescript": "^5.9.2"
+    }
+}
