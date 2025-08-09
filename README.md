@@ -1,4 +1,4 @@
-# React Fetch Cache
+# React Data Cache
 
 > ⚡ Lightweight React hook for **caching**, **prefetching**, and **stale-time** control — works in **JavaScript** and **TypeScript**.
 
