@@ -7,3 +7,4 @@ export * from "./prefetch";
 export * from "./useData";
 export * from "./useInfiniteQuery";
 export * from "./useScrollToLoad";
+export { useInfiniteScroll, clearInfiniteCache, invalidateInfiniteQuery, prefetchInfiniteQuery } from "./infiniteScrollUtils";
