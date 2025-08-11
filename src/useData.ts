@@ -23,6 +23,12 @@ export function useData<T>(
     Date.now() - (data.timestamp || 0) >
     (options.staleTime ?? defaultStaleTime);
 
+  const noCache = options.noCache ?? false;
+
+  if (noCache) {
+    dataCache.delete(key);
+  }
+
   if (data.status === "idle") {
     fetchOrUsePreloadedData(key, fn);
   }

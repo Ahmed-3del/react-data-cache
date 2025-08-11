@@ -10,6 +10,7 @@ export interface DataState<T> {
 export interface UseDataOptions {
   staleTime?: number;
   refetchOnMount?: boolean;
+  noCache?: boolean;
 }
 
 export interface UseDataResponse<T> {
