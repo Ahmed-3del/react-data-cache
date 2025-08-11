@@ -7,7 +7,8 @@ Follow these steps:
 2. Create a feature branch:
    ```sh
    git checkout -b feature/my-new-feature
-3.Make your changes.
+   3.Make your changes.
+   ```
 
 4.Test your changes locally.
 

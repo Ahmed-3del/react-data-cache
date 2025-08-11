@@ -9,6 +9,9 @@ export function subscribe(callback: () => void) {
     return () => window.removeEventListener("dataFetched", callback);
 }
 
+
+
+
 export function fetchOrUsePreloadedData<T>(key: string, fn?: FetchFunction<T>) {
     const preloaded = preloadedDataSources.find(d => d.key === key);
     const fetchFn = fn ?? preloaded?.fn;
@@ -29,7 +32,6 @@ export function formatDataResponse<T>(
         error: null,
         isRefetching: false,
     };
-
     const statusResponse: Record<string, any> = {
         idle: { ...defaultData, isLoading: true },
         isRefetching: { ...defaultData, isRefetching: true, data: payload },
@@ -37,7 +39,6 @@ export function formatDataResponse<T>(
         error: { ...defaultData, error: payload },
         success: { ...defaultData, data: payload },
     };
-
     return {
         ...statusResponse[status],
         refetch: () => {
