@@ -1,10 +1,6 @@
 {
     "name": "react-data-cache",
-<<<<<<< HEAD
     "version": "1.1.0",
-=======
-    "version": "1.0.1",
->>>>>>> 238829f4524417ee5734d354439e5561dec04792
     "description": "Lightweight React hook for caching, prefetching, and refetching data with stale-time control.",
     "main": "dist/index.js",
     "module": "dist/index.js",
