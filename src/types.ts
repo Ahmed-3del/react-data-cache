@@ -21,24 +21,46 @@ export interface UseDataResponse<T> {
   refetch: () => void;
 }
 
-export interface InfiniteQueryOptions<T> extends UseDataOptions {
-  initialPageParam?: any;
-  getNextPageParam?: (lastPage: T, allPages: T[]) => any;
-  getPreviousPageParam?: (firstPage: T, allPages: T[]) => any;
+export type UniversalPageParam = string | number | null | undefined | any;
+
+export interface UniversalInfiniteOptions<TData, TPageParam = any> {
+  // Required: Extract items from API response
+  select: (response: any) => TData[];
+
+  // Required: Determine next page parameter
+  getNextPageParam: (response: any, allResponses: any[], currentPageParam: TPageParam) => TPageParam | undefined;
+
+  // Optional: Initial page parameter
+  initialPageParam?: TPageParam;
+
+  // Optional: Extract previous page parameter (for bidirectional)
+  getPreviousPageParam?: (response: any, allResponses: any[], currentPageParam: TPageParam) => TPageParam | undefined;
+
+  // Optional: Transform each page response before storing
+  transformPage?: (response: any, pageParam: TPageParam) => any;
+
+  // Optional: Check if there are more pages (fallback)
+  hasNextPage?: (response: any) => boolean;
+
+  // Optional: Standard options
+  staleTime?: number;
+  refetchOnMount?: boolean;
+  enabled?: boolean;
 }
 
-export interface InfiniteDataState<T> {
+export interface UniversalInfiniteState<TData> {
   status: "idle" | "loading" | "success" | "error" | "fetchingNextPage" | "fetchingPreviousPage";
-  pages: T[];
+  pages: any[];
   pageParams: any[];
-  hasNextPage?: boolean;
-  hasPreviousPage?: boolean;
-  controller?: AbortController;
+  data: TData[];
+  error: any;
   timestamp?: number;
+  controller?: AbortController;
 }
 
-export interface UseInfiniteQueryResponse<T> {
-  data: T[];
+export interface UniversalInfiniteResponse<TData> {
+  data: TData[];
+  pages: any[];
   isLoading: boolean;
   error: any;
   isFetchingNextPage: boolean;
@@ -50,4 +72,9 @@ export interface UseInfiniteQueryResponse<T> {
   refetch: () => void;
 }
 
-export type InfiniteFetchFunction<T> = (pageParam: any, signal: AbortSignal) => Promise<T>;
+export type UniversalFetchFunction<TResponse> = (
+  pageParam: any,
+  signal: AbortSignal,
+  meta: { pageIndex: number; previousPageParam?: any }
+) => Promise<TResponse>;
+
