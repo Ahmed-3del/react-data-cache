@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useSyncExternalStore } from "react";
+import { useSyncExternalStore, useEffect, useRef } from "react";
 import {
     UniversalInfiniteOptions,
     UniversalInfiniteState,
@@ -11,7 +11,20 @@ import {
     subscribeUniversal,
     emitUniversalUpdate
 } from "./universalInfiniteCache";
-
+import { 
+  createRetryManager, 
+  createOptimisticUpdateManager,
+  createBackgroundSyncManager,
+  createRealtimeManager,
+  createAdvancedCacheManager,
+  createPerformanceMonitor,
+  RetryManager,
+  OptimisticUpdateManager,
+  BackgroundSyncManager,
+  RealtimeManager,
+  AdvancedCacheManager,
+  PerformanceMonitor
+} from "../enhancements";
 
 export function useUniversalInfiniteQuery<TData, TResponse = any, TPageParam = any>(
     key: string | (string | number)[],
@@ -31,6 +44,58 @@ export function useUniversalInfiniteQuery<TData, TResponse = any, TPageParam = a
         });
     }
 
+    // Enhancement managers
+    const retryManagerRef = useRef<RetryManager | null>(null);
+    const optimisticManagerRef = useRef<OptimisticUpdateManager<TData[]> | null>(null);
+    const backgroundSyncRef = useRef<BackgroundSyncManager | null>(null);
+    const realtimeRef = useRef<RealtimeManager | null>(null);
+    const advancedCacheRef = useRef<AdvancedCacheManager | null>(null);
+    const performanceMonitorRef = useRef<PerformanceMonitor | null>(null);
+
+    // Initialize managers if needed
+    if (options.retryAttempts && !retryManagerRef.current) {
+        retryManagerRef.current = createRetryManager({
+            attempts: options.retryAttempts,
+            delay: options.retryDelay || 1000,
+            exponentialBackoff: options.exponentialBackoff !== false,
+            onError: options.onError
+        });
+    }
+
+    if (options.optimisticUpdates && !optimisticManagerRef.current) {
+        optimisticManagerRef.current = createOptimisticUpdateManager<TData[]>();
+    }
+
+    if (options.backgroundSync && !backgroundSyncRef.current) {
+        backgroundSyncRef.current = createBackgroundSyncManager({
+            enabled: options.backgroundSync,
+            offlineSupport: options.offlineSupport || false
+        });
+    }
+
+    if (options.realtime && !realtimeRef.current) {
+        realtimeRef.current = createRealtimeManager({
+            enabled: options.realtime,
+            subscriptionUrl: options.subscriptionUrl,
+            onUpdate: options.onUpdate
+        });
+    }
+
+    if (options.cacheStrategy && options.cacheStrategy !== "default" && !advancedCacheRef.current) {
+        advancedCacheRef.current = createAdvancedCacheManager({
+            strategy: options.cacheStrategy,
+            cacheTime: options.cacheTime || 5 * 60 * 1000,
+            backgroundRefetch: options.backgroundRefetch || false
+        });
+    }
+
+    if (options.enableMetrics && !performanceMonitorRef.current) {
+        performanceMonitorRef.current = createPerformanceMonitor({
+            enabled: options.enableMetrics,
+            onMetrics: options.onMetrics
+        });
+    }
+
     const state = useSyncExternalStore(
         subscribeUniversal,
         () => universalInfiniteCache.get(cacheKey) as UniversalInfiniteState<TData>
@@ -38,8 +103,48 @@ export function useUniversalInfiniteQuery<TData, TResponse = any, TPageParam = a
 
     // Initial fetch
     if (state.status === "idle" && (options.enabled !== false)) {
-        fetchPage(cacheKey, fetchFn, options, options.initialPageParam, "initial");
+        fetchPage(
+            cacheKey,
+            fetchFn,
+            options as UniversalInfiniteOptions<TData, TPageParam | undefined>,
+            options.initialPageParam,
+            "initial"
+        );
     }
+
+    // Background sync setup
+    useEffect(() => {
+        if (options.backgroundSync && backgroundSyncRef.current) {
+            backgroundSyncRef.current.startSync();
+            
+            return () => {
+                backgroundSyncRef.current?.stopSync();
+            };
+        }
+    }, [options.backgroundSync]);
+
+    // Real-time subscription setup
+    useEffect(() => {
+        if (options.realtime && realtimeRef.current) {
+            realtimeRef.current.connect();
+            
+            return () => {
+                realtimeRef.current?.disconnect();
+            };
+        }
+    }, [options.realtime, options.subscriptionUrl]);
+
+    // Performance monitoring setup
+    useEffect(() => {
+        if (options.enableMetrics && performanceMonitorRef.current) {
+            const interval = setInterval(() => {
+                const metrics = performanceMonitorRef.current!.getMetrics();
+                options.onMetrics?.(metrics);
+            }, 5000);
+            
+            return () => clearInterval(interval);
+        }
+    }, [options.enableMetrics, options.onMetrics]);
 
     // Calculate derived state
     const flattenedData = state.pages.flatMap((page, index) => {
@@ -61,7 +166,7 @@ export function useUniversalInfiniteQuery<TData, TResponse = any, TPageParam = a
         : false;
 
     return {
-        data: flattenedData,
+        data: state.optimisticData || flattenedData,
         pages: state.pages,
         isLoading: state.status === "loading",
         error: state.status === "error" ? state.error : null,
@@ -71,18 +176,78 @@ export function useUniversalInfiniteQuery<TData, TResponse = any, TPageParam = a
         hasPreviousPage,
         fetchNextPage: () => {
             if (hasNextPage && state.status !== "fetchingNextPage") {
-                const nextPageParam = options.getNextPageParam(lastPage, state.pages, lastPageParam);
-                fetchPage(cacheKey, fetchFn, options, nextPageParam, "next");
+                const nextPageParam = options.getNextPageParam(
+                    lastPage,
+                    state.pages,
+                    lastPageParam as typeof lastPageParam | undefined
+                );
+                fetchPage(
+                    cacheKey,
+                    fetchFn,
+                    options as UniversalInfiniteOptions<TData, typeof lastPageParam | undefined>,
+                    nextPageParam,
+                    "next"
+                );
             }
         },
         fetchPreviousPage: () => {
             if (hasPreviousPage && state.status !== "fetchingPreviousPage" && options.getPreviousPageParam) {
-                const prevPageParam = options.getPreviousPageParam(firstPage, state.pages, firstPageParam);
-                fetchPage(cacheKey, fetchFn, options, prevPageParam, "previous");
+                const prevPageParam = options.getPreviousPageParam(
+                    firstPage,
+                    state.pages,
+                    firstPageParam as typeof firstPageParam | undefined
+                );
+                fetchPage(
+                    cacheKey,
+                    fetchFn,
+                    options as UniversalInfiniteOptions<TData, typeof firstPageParam | undefined>,
+                    prevPageParam,
+                    "previous"
+                );
             }
         },
         refetch: () => {
             refetchAll(cacheKey, fetchFn, options);
+        },
+        // High Priority Enhancements
+        updateOptimistically: (optimisticData: Partial<TData[]>, mutationFn: () => Promise<void>) => {
+            if (optimisticManagerRef.current && state.status === "success") {
+                optimisticManagerRef.current.updateOptimistically(
+                    flattenedData,
+                    optimisticData,
+                    mutationFn,
+                    () => {
+                        // Rollback function
+                        const currentState = universalInfiniteCache.get(cacheKey);
+                        if (currentState) {
+                            universalInfiniteCache.set(cacheKey, {
+                                ...currentState,
+                                optimisticData: undefined
+                            });
+                            emitUniversalUpdate();
+                        }
+                    }
+                );
+            }
+        },
+        retry: () => {
+            if (retryManagerRef.current) {
+                retryManagerRef.current.reset();
+            }
+            refetchAll(cacheKey, fetchFn, options);
+        },
+        retryCount: state.retryCount || 0,
+        syncStatus: state.syncStatus || "online",
+        // Medium Priority Enhancements
+        isConnected: realtimeRef.current?.isConnected() || true,
+        metrics: state.metrics || performanceMonitorRef.current?.getMetrics() || {
+            fetchTime: 0,
+            cacheHitRate: 0,
+            retryCount: 0,
+            lastFetchTimestamp: 0,
+            totalRequests: 0,
+            successfulRequests: 0,
+            failedRequests: 0
         }
     };
 }
@@ -156,7 +321,9 @@ async function fetchPage<TData, TResponse, TPageParam>(
                     ...updatedState,
                     status: "error",
                     error,
-                    controller: undefined
+                    controller: undefined,
+                    retryCount: (updatedState.retryCount || 0) + 1,
+                    lastError: error
                 });
             }
         }
@@ -215,7 +382,9 @@ async function refetchAll<TData, TResponse, TPageParam>(
                 ...currentState,
                 status: "error",
                 error,
-                controller: undefined
+                controller: undefined,
+                retryCount: (currentState.retryCount || 0) + 1,
+                lastError: error
             });
         }
     } finally {

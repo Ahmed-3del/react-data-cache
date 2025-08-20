@@ -5,12 +5,35 @@ export interface DataState<T> {
   payload: T | null;
   controller?: AbortController;
   timestamp?: number;
+  // New fields for enhancements
+  optimisticData?: T;
+  retryCount?: number;
+  lastError?: any;
+  syncStatus?: "online" | "offline" | "syncing";
+  metrics?: PerformanceMetrics;
 }
 
 export interface UseDataOptions {
   staleTime?: number;
   refetchOnMount?: boolean;
   noCache?: boolean;
+  // High Priority Enhancements
+  optimisticUpdates?: boolean;
+  retryAttempts?: number;
+  retryDelay?: number;
+  exponentialBackoff?: boolean;
+  onError?: (error: any, attempt: number) => void;
+  backgroundSync?: boolean;
+  offlineSupport?: boolean;
+  // Medium Priority Enhancements
+  realtime?: boolean;
+  subscriptionUrl?: string;
+  onUpdate?: (newData: any) => void;
+  cacheStrategy?: "default" | "stale-while-revalidate" | "cache-first" | "network-first";
+  cacheTime?: number;
+  backgroundRefetch?: boolean;
+  enableMetrics?: boolean;
+  onMetrics?: (metrics: PerformanceMetrics) => void;
 }
 
 export interface UseDataResponse<T> {
@@ -19,6 +42,14 @@ export interface UseDataResponse<T> {
   error: any;
   isRefetching: boolean;
   refetch: () => void;
+  // High Priority Enhancements
+  updateOptimistically: (optimisticData: Partial<T>, mutationFn: () => Promise<void>) => void;
+  retry: () => void;
+  retryCount: number;
+  syncStatus: "online" | "offline" | "syncing";
+  // Medium Priority Enhancements
+  isConnected: boolean;
+  metrics: PerformanceMetrics;
 }
 
 export type UniversalPageParam = string | number | null | undefined | any;
@@ -46,6 +77,25 @@ export interface UniversalInfiniteOptions<TData, TPageParam = any> {
   staleTime?: number;
   refetchOnMount?: boolean;
   enabled?: boolean;
+  
+  // High Priority Enhancements
+  optimisticUpdates?: boolean;
+  retryAttempts?: number;
+  retryDelay?: number;
+  exponentialBackoff?: boolean;
+  onError?: (error: any, attempt: number) => void;
+  backgroundSync?: boolean;
+  offlineSupport?: boolean;
+  
+  // Medium Priority Enhancements
+  realtime?: boolean;
+  subscriptionUrl?: string;
+  onUpdate?: (newData: any) => void;
+  cacheStrategy?: "default" | "stale-while-revalidate" | "cache-first" | "network-first";
+  cacheTime?: number;
+  backgroundRefetch?: boolean;
+  enableMetrics?: boolean;
+  onMetrics?: (metrics: PerformanceMetrics) => void;
 }
 
 export interface UniversalInfiniteState<TData> {
@@ -56,6 +106,12 @@ export interface UniversalInfiniteState<TData> {
   error: any;
   timestamp?: number;
   controller?: AbortController;
+  // New fields for enhancements
+  optimisticData?: TData[];
+  retryCount?: number;
+  lastError?: any;
+  syncStatus?: "online" | "offline" | "syncing";
+  metrics?: PerformanceMetrics;
 }
 
 export interface UniversalInfiniteResponse<TData> {
@@ -70,6 +126,14 @@ export interface UniversalInfiniteResponse<TData> {
   fetchNextPage: () => void;
   fetchPreviousPage: () => void;
   refetch: () => void;
+  // High Priority Enhancements
+  updateOptimistically: (optimisticData: Partial<TData[]>, mutationFn: () => Promise<void>) => void;
+  retry: () => void;
+  retryCount: number;
+  syncStatus: "online" | "offline" | "syncing";
+  // Medium Priority Enhancements
+  isConnected: boolean;
+  metrics: PerformanceMetrics;
 }
 
 export type UniversalFetchFunction<TResponse> = (
@@ -77,4 +141,57 @@ export type UniversalFetchFunction<TResponse> = (
   signal: AbortSignal,
   meta: { pageIndex: number; previousPageParam?: any }
 ) => Promise<TResponse>;
+
+// New interfaces for enhancements
+export interface PerformanceMetrics {
+  fetchTime: number;
+  cacheHitRate: number;
+  retryCount: number;
+  lastFetchTimestamp: number;
+  totalRequests: number;
+  successfulRequests: number;
+  failedRequests: number;
+}
+
+export interface OptimisticUpdate<T> {
+  data: Partial<T>;
+  mutationFn: () => Promise<void>;
+  rollbackFn?: () => void;
+}
+
+export interface RetryConfig {
+  attempts: number;
+  delay: number;
+  exponentialBackoff: boolean;
+  onError?: (error: any, attempt: number) => void;
+}
+
+export interface BackgroundSyncConfig {
+  enabled: boolean;
+  offlineSupport: boolean;
+  syncInterval?: number;
+  onSync?: (data: any) => void;
+}
+
+export interface RealtimeConfig {
+  enabled: boolean;
+  subscriptionUrl?: string;
+  onUpdate?: (newData: any) => void;
+  onConnect?: () => void;
+  onDisconnect?: () => void;
+}
+
+export interface CacheConfig {
+  strategy: "default" | "stale-while-revalidate" | "cache-first" | "network-first";
+  cacheTime: number;
+  backgroundRefetch: boolean;
+  version?: string;
+}
+
+export interface MetricsConfig {
+  enabled: boolean;
+  onMetrics?: (metrics: PerformanceMetrics) => void;
+  trackCacheHits?: boolean;
+  trackFetchTimes?: boolean;
+}
 

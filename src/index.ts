@@ -1,10 +1,10 @@
 export { useData } from "./useData";
-export { prefetchData, prefetchMulti, prefetchOnEvent } from "./prefetch";
-export { clearDataCache } from "./cache";
+export { prefetchData, prefetchMulti, prefetchOnEvent, prefetchWithStrategy, prefetchInBackground } from "./prefetch";
+export { clearDataCache, performanceMonitor, advancedCache, backgroundSync } from "./cache";
 export * from "./types";
 export * from "./cache";
 export * from "./prefetch";
 export * from "./useData";
-export * from "./useInfiniteQuery";
-export * from "./useScrollToLoad";
-export { useInfiniteScroll, clearInfiniteCache, invalidateInfiniteQuery, prefetchInfiniteQuery } from "./infiniteScrollUtils";
+export * from "./infinite-scroll/useUniversalInfiniteQuery";
+export * from "./infinite-scroll/universalInfiniteCache";
+export * from "./enhancements";
