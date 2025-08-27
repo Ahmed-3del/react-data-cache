@@ -156,6 +156,7 @@ export function useData<T>(
 - **No-cache mode**: Bypass caching when needed
 
 **State Management Flow:**
+
 1. Check if cache entry exists
 2. Subscribe to state updates
 3. Check if data is stale
