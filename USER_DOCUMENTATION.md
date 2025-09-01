@@ -1,18 +1,17 @@
 # User Documentation - React Data Cache Library
 
 ## Table of Contents
+
 1. [Getting Started](#getting-started)
 2. [Basic Usage](#basic-usage)
 3. [Data Fetching with `useData`](#data-fetching-with-usedata)
-4. [Prefetching Data](#prefetching-data)
-5. [Infinite Scroll](#infinite-scroll)
+4. [Infinite Scroll](#infinite-scroll)
+5. [Prefetching Data](#prefetching-data)
 6. [Advanced Features](#advanced-features)
 7. [Best Practices](#best-practices)
 8. [Troubleshooting](#troubleshooting)
 9. [API Reference](#api-reference)
 10. [Examples](#examples)
-11. [Why Not useEffect?](#why-not-useeffect)
-12. [Enhancement Suggestions](#enhancement-suggestions)
 
 ## Getting Started
 
@@ -163,66 +162,6 @@ function UserProfile({ userId }: { userId: string }) {
 
   return <UserCard user={data} />;
 }
-```
-
-## Prefetching Data
-
-### Basic Prefetching
-
-```typescript
-import { prefetchData } from 'react-data-cache';
-
-// Prefetch data for a specific key
-prefetchData('posts', async (signal) => {
-  const response = await fetch('/api/posts', { signal });
-  return response.json();
-});
-```
-
-### Route-Based Prefetching
-
-```typescript
-import { prefetchMulti } from 'react-data-cache';
-
-// Prefetch multiple data sources
-prefetchMulti([
-  { key: 'posts', fn: fetchPosts },
-  { key: 'users', fn: fetchUsers },
-  { key: 'comments', fn: fetchComments }
-]);
-```
-
-### Event-Based Prefetching
-
-```typescript
-import { prefetchOnEvent } from 'react-data-cache';
-
-function PostCard({ post }: { post: Post }) {
-  const handleMouseEnter = () => {
-    // Prefetch comments when user hovers over post
-    prefetchOnEvent(`comments-${post.id}`, async (signal) => {
-      const response = await fetch(`/api/posts/${post.id}/comments`, { signal });
-      return response.json();
-    });
-  };
-
-  return (
-    <div onMouseEnter={handleMouseEnter}>
-      <h3>{post.title}</h3>
-      <p>{post.excerpt}</p>
-    </div>
-  );
-}
-```
-
-### URL-Based Prefetching
-
-```typescript
-// Only prefetch data for current route
-prefetchMulti([
-  { key: 'posts', fn: fetchPosts },
-  { key: 'users', fn: fetchUsers }
-], { urlBasedPrefetching: true });
 ```
 
 ## Infinite Scroll
@@ -407,108 +346,311 @@ function ChatMessages({ chatId }: { chatId: string }) {
 }
 ```
 
+## Prefetching Data
+
+### Basic Prefetching
+
+```typescript
+import { prefetchData } from 'react-data-cache';
+
+// Prefetch data for a specific key
+prefetchData('posts', async (signal) => {
+  const response = await fetch('/api/posts', { signal });
+  return response.json();
+});
+```
+
+### Route-Based Prefetching
+
+```typescript
+import { prefetchMulti } from 'react-data-cache';
+
+// Prefetch multiple data sources
+prefetchMulti([
+  { key: 'posts', fn: fetchPosts },
+  { key: 'users', fn: fetchUsers },
+  { key: 'comments', fn: fetchComments }
+]);
+```
+
+### Event-Based Prefetching
+
+```typescript
+import { prefetchOnEvent } from 'react-data-cache';
+
+function PostCard({ post }: { post: Post }) {
+  const handleMouseEnter = () => {
+    // Prefetch comments when user hovers over post
+    prefetchOnEvent(`comments-${post.id}`, async (signal) => {
+      const response = await fetch(`/api/posts/${post.id}/comments`, { signal });
+      return response.json();
+    });
+  };
+
+  return (
+    <div onMouseEnter={handleMouseEnter}>
+      <h3>{post.title}</h3>
+      <p>{post.excerpt}</p>
+    </div>
+  );
+}
+```
+
+### Advanced Prefetching Strategies
+
+```typescript
+import { prefetchWithStrategy, prefetchInBackground } from 'react-data-cache';
+
+// Prefetch with cache strategy
+prefetchWithStrategy(
+  'user-123',
+  async (signal) => {
+    const response = await fetch('/api/users/123', { signal });
+    return response.json();
+  },
+  'stale-while-revalidate'
+);
+
+// Background prefetching
+const cleanup = prefetchInBackground(
+  'live-data',
+  async (signal) => {
+    const response = await fetch('/api/live-data', { signal });
+    return response.json();
+  },
+  30000 // 30 seconds
+);
+
+// Cleanup function
+return cleanup;
+```
+
 ## Advanced Features
 
-### Cache Management
+### 1. Optimistic Updates
 
 ```typescript
-import { clearDataCache } from 'react-data-cache';
-
-// Clear all cached data
-function handleLogout() {
-  clearDataCache();
-  // Navigate to login page
-}
-
-// Clear specific data
-function handlePostUpdate() {
-  // Clear posts cache to force refresh
-  clearDataCache();
-  // Or use a more specific approach by refetching
-  refetch();
-}
-```
-
-### Conditional Fetching
-
-```typescript
-function ConditionalDataFetch({ userId, enabled }: { userId: string; enabled: boolean }) {
-  const { data, isLoading } = useData(
-    `user-${userId}`,
+function OptimisticPostUpdate({ postId }: { postId: string }) {
+  const { data, updateOptimistically } = useData<Post>(
+    `post-${postId}`,
     async (signal) => {
-      const response = await fetch(`/api/users/${userId}`, { signal });
+      const response = await fetch(`/api/posts/${postId}`, { signal });
       return response.json();
     },
-    {
-      // Only fetch if enabled is true
-      enabled: enabled
-    }
+    { optimisticUpdates: true }
   );
 
-  if (!enabled) return <div>Data fetching disabled</div>;
-  if (isLoading) return <div>Loading...</div>;
-
-  return <UserProfile user={data} />;
-}
-```
-
-### Optimistic Updates
-
-```typescript
-function OptimisticPostUpdate({ post }: { post: Post }) {
-  const { data, refetch } = useData(
-    `post-${post.id}`,
-    fetchPost
-  );
-
-  const handleLike = async () => {
-    // Optimistically update UI
-    const optimisticData = { ...data, likes: data.likes + 1 };
-    
-    try {
-      await fetch(`/api/posts/${post.id}/like`, { method: 'POST' });
-      // Refetch to get actual server state
-      refetch();
-    } catch (error) {
-      // Revert optimistic update on error
-      refetch();
-    }
+  const handleLike = () => {
+    updateOptimistically(
+      { likes: (data?.likes || 0) + 1 },
+      async () => {
+        await fetch(`/api/posts/${postId}/like`, { method: 'POST' });
+      }
+    );
   };
 
   return (
     <div>
-      <h2>{data.title}</h2>
+      <h2>{data?.title}</h2>
       <button onClick={handleLike}>
-        Like ({data.likes})
+        Like ({data?.likes || 0})
       </button>
     </div>
   );
 }
 ```
 
-### Background Refetching
+### 2. Advanced Error Recovery and Retry Logic
 
 ```typescript
-function AutoRefreshingData() {
-  const { data, refetch } = useData(
-    'live-data',
-    fetchLiveData,
+function RobustDataFetch({ userId }: { userId: string }) {
+  const { data, error, retry, retryCount, metrics } = useData<User>(
+    `user-${userId}`,
+    async (signal) => {
+      const response = await fetch(`/api/users/${userId}`, { signal });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      return response.json();
+    },
     {
-      staleTime: 30 * 1000, // 30 seconds
-      refetchOnMount: true
+      retryAttempts: 5,
+      retryDelay: 1000,
+      exponentialBackoff: true,
+      onError: (error, attempt) => {
+        console.log(`Attempt ${attempt} failed:`, error.message);
+      },
+      enableMetrics: true,
+      onMetrics: (metrics) => {
+        console.log('Performance metrics:', metrics);
+      }
     }
   );
 
-  // Set up background refetching
-  useEffect(() => {
-    const interval = setInterval(() => {
-      refetch();
-    }, 60 * 1000); // Refetch every minute
+  if (error) {
+    return (
+      <div className="error">
+        <p>Failed to load user (attempt {retryCount})</p>
+        <p>{error.message}</p>
+        <button onClick={retry}>Retry</button>
+        <div>
+          <small>Fetch time: {metrics.fetchTime}ms</small>
+          <small>Cache hit rate: {(metrics.cacheHitRate * 100).toFixed(1)}%</small>
+        </div>
+      </div>
+    );
+  }
 
-    return () => clearInterval(interval);
-  }, [refetch]);
+  return <UserCard user={data} />;
+}
+```
 
-  return <LiveDataDisplay data={data} />;
+### 3. Background Sync and Offline Support
+
+```typescript
+function OfflineAwarePosts() {
+  const { data, syncStatus, metrics } = useData<Post[]>(
+    'posts',
+    async (signal) => {
+      const response = await fetch('/api/posts', { signal });
+      return response.json();
+    },
+    {
+      backgroundSync: true,
+      offlineSupport: true,
+      staleTime: 30 * 1000, // 30 seconds
+      enableMetrics: true
+    }
+  );
+
+  return (
+    <div>
+      <div className="sync-status">
+        Status: {syncStatus}
+        {syncStatus === 'offline' && <span> (Working offline)</span>}
+      </div>
+      
+      {data?.map(post => (
+        <PostCard key={post.id} post={post} />
+      ))}
+      
+      <div className="metrics">
+        <small>Total requests: {metrics.totalRequests}</small>
+        <small>Success rate: {((metrics.successfulRequests / metrics.totalRequests) * 100).toFixed(1)}%</small>
+      </div>
+    </div>
+  );
+}
+```
+
+### 4. Real-time Subscriptions
+
+```typescript
+function LiveChat({ chatId }: { chatId: string }) {
+  const { data, isConnected, metrics } = useData<Message[]>(
+    `chat-${chatId}`,
+    async (signal) => {
+      const response = await fetch(`/api/chats/${chatId}/messages`, { signal });
+      return response.json();
+    },
+    {
+      realtime: true,
+      subscriptionUrl: `ws://api.example.com/chats/${chatId}`,
+      onUpdate: (newData) => {
+        console.log('New message received:', newData);
+      },
+      enableMetrics: true
+    }
+  );
+
+  return (
+    <div className="chat">
+      <div className="connection-status">
+        {isConnected ? '🟢 Connected' : '🔴 Disconnected'}
+      </div>
+      
+      {data?.map(message => (
+        <MessageBubble key={message.id} message={message} />
+      ))}
+      
+      <div className="metrics">
+        <small>Last fetch: {new Date(metrics.lastFetchTimestamp).toLocaleTimeString()}</small>
+      </div>
+    </div>
+  );
+}
+```
+
+### 5. Advanced Caching Strategies
+
+```typescript
+function SmartUserProfile({ userId }: { userId: string }) {
+  const { data, metrics } = useData<User>(
+    `user-${userId}`,
+    async (signal) => {
+      const response = await fetch(`/api/users/${userId}`, { signal });
+      return response.json();
+    },
+    {
+      cacheStrategy: "stale-while-revalidate",
+      cacheTime: 10 * 60 * 1000, // 10 minutes
+      backgroundRefetch: true,
+      enableMetrics: true
+    }
+  );
+
+  return (
+    <div>
+      <UserCard user={data} />
+      <div className="cache-info">
+        <small>Cache hit rate: {(metrics.cacheHitRate * 100).toFixed(1)}%</small>
+        <small>Average fetch time: {metrics.fetchTime}ms</small>
+      </div>
+    </div>
+  );
+}
+```
+
+### 6. Performance Monitoring
+
+```typescript
+function MonitoredDataFetch() {
+  const { data, metrics } = useData<Post[]>(
+    'monitored-posts',
+    async (signal) => {
+      const response = await fetch('/api/posts', { signal });
+      return response.json();
+    },
+    {
+      enableMetrics: true,
+      onMetrics: (metrics) => {
+        // Send metrics to analytics service
+        analytics.track('data_fetch_metrics', {
+          fetchTime: metrics.fetchTime,
+          cacheHitRate: metrics.cacheHitRate,
+          totalRequests: metrics.totalRequests,
+          successfulRequests: metrics.successfulRequests,
+          failedRequests: metrics.failedRequests
+        });
+      }
+    }
+  );
+
+  return (
+    <div>
+      <h3>Performance Dashboard</h3>
+      <div className="metrics-dashboard">
+        <div>Fetch Time: {metrics.fetchTime}ms</div>
+        <div>Cache Hit Rate: {(metrics.cacheHitRate * 100).toFixed(1)}%</div>
+        <div>Total Requests: {metrics.totalRequests}</div>
+        <div>Success Rate: {((metrics.successfulRequests / metrics.totalRequests) * 100).toFixed(1)}%</div>
+      </div>
+      
+      {data?.map(post => (
+        <PostCard key={post.id} post={post} />
+      ))}
+    </div>
+  );
 }
 ```
 
@@ -767,24 +909,7 @@ Main data fetching hook.
 **Returns:**
 - `UseDataResponse<T>` - Data state and controls
 
-### `prefetchData(key, fn, options?)`
-
-Prefetch data for a specific key.
-
-**Parameters:**
-- `key: string` - Cache key
-- `fn: FetchFunction<T>` - Fetch function
-- `options?: { refetching?: boolean }` - Prefetch options
-
-### `prefetchMulti(dataSources, options?)`
-
-Prefetch multiple data sources.
-
-**Parameters:**
-- `dataSources: Array<{key: string, fn: FetchFunction}>` - Data sources
-- `options?: { urlBasedPrefetching?: boolean }` - Prefetch options
-
-### `useUniversalInfiniteQuery(key, fetchFn, options)`
+### `useUniversalInfiniteQuery<TData, TResponse, TPageParam>(key, fetchFn, options)`
 
 Infinite scroll hook with universal pagination support.
 
@@ -792,6 +917,45 @@ Infinite scroll hook with universal pagination support.
 - `key: string | (string | number)[]` - Cache key
 - `fetchFn: UniversalFetchFunction<TResponse>` - Fetch function
 - `options: UniversalInfiniteOptions<TData, TPageParam>` - Configuration
+
+### `prefetchData(key, fn, options?)`
+
+Prefetch data for a specific key.
+
+**Parameters:**
+- `key: string` - Cache key
+- `fn: FetchFunction<T>` - Fetch function
+- `options?: { refetching?: boolean; retryConfig?: any; cacheStrategy?: string }` - Prefetch options
+
+### `prefetchMulti(dataSources, options?)`
+
+Prefetch multiple data sources.
+
+**Parameters:**
+- `dataSources: Array<{key: string, fn: FetchFunction}>` - Data sources
+- `options?: { urlBasedPrefetching?: boolean; retryConfig?: any; cacheStrategy?: string; batchSize?: number }` - Prefetch options
+
+### `prefetchWithStrategy(key, fn, strategy, options?)`
+
+Prefetch with specific cache strategy.
+
+**Parameters:**
+- `key: string` - Cache key
+- `fn: FetchFunction<T>` - Fetch function
+- `strategy: "cache-first" | "network-first" | "stale-while-revalidate"` - Cache strategy
+- `options?: any` - Additional options
+
+### `prefetchInBackground(key, fn, interval?)`
+
+Background prefetching with interval.
+
+**Parameters:**
+- `key: string` - Cache key
+- `fn: FetchFunction<T>` - Fetch function
+- `interval: number` - Interval in milliseconds (default: 30000)
+
+**Returns:**
+- `() => void` - Cleanup function
 
 ### `clearDataCache()`
 
@@ -947,6 +1111,7 @@ function App() {
       <header>
         <h1>My Blog</h1>
       </header>
+      
       <main>
         <UserProfile userId="123" />
         <PostsList />
@@ -959,435 +1124,3 @@ export default App;
 ```
 
 This user documentation provides comprehensive guidance on how to use the library effectively, with practical examples and best practices for real-world applications.
-
-## Why Not useEffect?
-
-### Problems with useEffect for Data Fetching
-
-Using `useEffect` for data fetching is a common anti-pattern that leads to numerous issues:
-
-#### 1. **Memory Leaks and Race Conditions**
-
-```typescript
-// ❌ BAD: useEffect with race conditions
-function UserProfile({ userId }: { userId: string }) {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    setLoading(true);
-    setError(null);
-    
-    fetch(`/api/users/${userId}`)
-      .then(res => res.json())
-      .then(data => {
-        setUser(data); // ⚠️ Race condition: might be stale
-        setLoading(false);
-      })
-      .catch(err => {
-        setError(err);
-        setLoading(false);
-      });
-  }, [userId]);
-
-  // Problems:
-  // - No request cancellation when userId changes
-  // - Race conditions if multiple requests are in flight
-  // - Memory leaks from abandoned requests
-  // - No cleanup on unmount
-}
-```
-
-#### 2. **No Caching or Deduplication**
-
-```typescript
-// ❌ BAD: No caching, duplicate requests
-function PostList() {
-  const [posts, setPosts] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch('/api/posts')
-      .then(res => res.json())
-      .then(data => setPosts(data));
-  }, []);
-
-  // Problems:
-  // - Same data fetched multiple times
-  // - No sharing between components
-  // - Unnecessary network requests
-  // - Poor performance
-}
-
-// Multiple components fetch the same data
-function App() {
-  return (
-    <div>
-      <PostList /> {/* Fetches posts */}
-      <PostCount /> {/* Fetches posts again! */}
-      <RecentPosts /> {/* Fetches posts again! */}
-    </div>
-  );
-}
-```
-
-#### 3. **Complex State Management**
-
-```typescript
-// ❌ BAD: Complex state management
-function DataComponent() {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [refetching, setRefetching] = useState(false);
-
-  const fetchData = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await fetch('/api/data');
-      const result = await response.json();
-      setData(result);
-    } catch (err) {
-      setError(err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const refetch = useCallback(async () => {
-    try {
-      setRefetching(true);
-      const response = await fetch('/api/data');
-      const result = await response.json();
-      setData(result);
-    } catch (err) {
-      setError(err);
-    } finally {
-      setRefetching(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  // Problems:
-  // - Boilerplate code for every component
-  // - Manual state management
-  // - Error-prone state updates
-  // - No automatic retry logic
-}
-```
-
-#### 4. **No Stale-Time Control**
-
-```typescript
-// ❌ BAD: No stale-time control
-function LiveData() {
-  const [data, setData] = useState(null);
-
-  useEffect(() => {
-    const fetchData = () => {
-      fetch('/api/live-data')
-        .then(res => res.json())
-        .then(setData);
-    };
-
-    fetchData(); // Initial fetch
-    
-    const interval = setInterval(fetchData, 5000); // Always refetch every 5s
-    
-    return () => clearInterval(interval);
-  }, []);
-
-  // Problems:
-  // - Always refetches regardless of data freshness
-  // - No intelligent caching
-  // - Wastes bandwidth and server resources
-  // - Poor user experience with unnecessary loading states
-}
-```
-
-#### 5. **No Request Cancellation**
-
-```typescript
-// ❌ BAD: No request cancellation
-function SearchResults({ query }: { query: string }) {
-  const [results, setResults] = useState([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (!query) return;
-    
-    setLoading(true);
-    fetch(`/api/search?q=${query}`)
-      .then(res => res.json())
-      .then(data => {
-        setResults(data); // ⚠️ Might be stale if query changed
-        setLoading(false);
-      });
-  }, [query]);
-
-  // Problems:
-  // - Abandoned requests continue running
-  // - Memory leaks
-  // - Race conditions
-  // - Poor performance
-}
-```
-
-### How Our Library Solves These Problems
-
-#### 1. **Automatic Request Cancellation**
-
-```typescript
-// ✅ GOOD: Automatic request cancellation
-function UserProfile({ userId }: { userId: string }) {
-  const { data, isLoading, error } = useData(
-    `user-${userId}`,
-    async (signal) => {
-      const response = await fetch(`/api/users/${userId}`, { signal });
-      return response.json();
-    }
-  );
-
-  // Benefits:
-  // - Automatic cancellation when userId changes
-  // - No race conditions
-  // - No memory leaks
-  // - Clean, simple code
-}
-```
-
-#### 2. **Built-in Caching and Deduplication**
-
-```typescript
-// ✅ GOOD: Automatic caching and deduplication
-function PostList() {
-  const { data: posts } = useData('posts', fetchPosts);
-  return <div>{/* render posts */}</div>;
-}
-
-function PostCount() {
-  const { data: posts } = useData('posts', fetchPosts); // Uses cached data!
-  return <div>Total: {posts.length}</div>;
-}
-
-function RecentPosts() {
-  const { data: posts } = useData('posts', fetchPosts); // Uses cached data!
-  return <div>{/* render recent posts */}</div>;
-}
-
-// Benefits:
-// - Single network request for all components
-// - Automatic data sharing
-// - Better performance
-// - Reduced server load
-```
-
-#### 3. **Simple State Management**
-
-```typescript
-// ✅ GOOD: Simple, declarative state management
-function DataComponent() {
-  const { data, isLoading, error, refetch } = useData(
-    'my-data',
-    async (signal) => {
-      const response = await fetch('/api/data', { signal });
-      return response.json();
-    }
-  );
-
-  // Benefits:
-  // - No manual state management
-  // - Built-in loading, error, and refetch states
-  // - Less boilerplate code
-  // - Fewer bugs
-}
-```
-
-#### 4. **Intelligent Stale-Time Control**
-
-```typescript
-// ✅ GOOD: Intelligent stale-time control
-function LiveData() {
-  const { data, refetch } = useData(
-    'live-data',
-    fetchLiveData,
-    {
-      staleTime: 30 * 1000, // 30 seconds
-      refetchOnMount: true
-    }
-  );
-
-  // Set up background refetching only when needed
-  useEffect(() => {
-    const interval = setInterval(refetch, 60 * 1000); // Refetch every minute
-    return () => clearInterval(interval);
-  }, [refetch]);
-
-  // Benefits:
-  // - Only refetches when data is stale
-  // - Configurable stale times
-  // - Better performance
-  // - Reduced server load
-}
-```
-
-#### 5. **Automatic Request Deduplication**
-
-```typescript
-// ✅ GOOD: Automatic request deduplication
-function SearchResults({ query }: { query: string }) {
-  const { data: results, isLoading } = useData(
-    `search-${query}`,
-    async (signal) => {
-      const response = await fetch(`/api/search?q=${query}`, { signal });
-      return response.json();
-    },
-    {
-      staleTime: 5 * 60 * 1000 // Cache for 5 minutes
-    }
-  );
-
-  // Benefits:
-  // - Automatic request cancellation
-  // - No race conditions
-  // - Cached results for repeated searches
-  // - Better user experience
-}
-```
-
-### Performance Comparison
-
-| Feature | useEffect | Our Library |
-|---------|-----------|-------------|
-| **Request Cancellation** | ❌ Manual | ✅ Automatic |
-| **Caching** | ❌ None | ✅ Built-in |
-| **Deduplication** | ❌ None | ✅ Automatic |
-| **Stale-time Control** | ❌ Manual | ✅ Configurable |
-| **State Management** | ❌ Complex | ✅ Simple |
-| **Memory Leaks** | ❌ Common | ✅ Prevented |
-| **Race Conditions** | ❌ Common | ✅ Eliminated |
-| **Code Complexity** | ❌ High | ✅ Low |
-| **Performance** | ❌ Poor | ✅ Optimized |
-| **Developer Experience** | ❌ Poor | ✅ Excellent |
-
-### Real-World Example: User Dashboard
-
-```typescript
-// ❌ BAD: useEffect approach (100+ lines of complex code)
-function UserDashboard({ userId }: { userId: string }) {
-  const [user, setUser] = useState(null);
-  const [posts, setPosts] = useState([]);
-  const [comments, setComments] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [refetching, setRefetching] = useState(false);
-
-  const fetchUser = useCallback(async () => {
-    try {
-      const response = await fetch(`/api/users/${userId}`);
-      const data = await response.json();
-      setUser(data);
-    } catch (err) {
-      setError(err);
-    }
-  }, [userId]);
-
-  const fetchPosts = useCallback(async () => {
-    try {
-      const response = await fetch(`/api/users/${userId}/posts`);
-      const data = await response.json();
-      setPosts(data);
-    } catch (err) {
-      setError(err);
-    }
-  }, [userId]);
-
-  const fetchComments = useCallback(async () => {
-    try {
-      const response = await fetch(`/api/users/${userId}/comments`);
-      const data = await response.json();
-      setComments(data);
-    } catch (err) {
-      setError(err);
-    }
-  }, [userId]);
-
-  const refetch = useCallback(async () => {
-    setRefetching(true);
-    try {
-      await Promise.all([fetchUser(), fetchPosts(), fetchComments()]);
-    } catch (err) {
-      setError(err);
-    } finally {
-      setRefetching(false);
-    }
-  }, [fetchUser, fetchPosts, fetchComments]);
-
-  useEffect(() => {
-    setLoading(true);
-    Promise.all([fetchUser(), fetchPosts(), fetchComments()])
-      .finally(() => setLoading(false));
-  }, [fetchUser, fetchPosts, fetchComments]);
-
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error.message}</div>;
-
-  return (
-    <div>
-      <UserInfo user={user} />
-      <PostsList posts={posts} />
-      <CommentsList comments={comments} />
-      <button onClick={refetch} disabled={refetching}>
-        {refetching ? 'Refreshing...' : 'Refresh'}
-      </button>
-    </div>
-  );
-}
-
-// ✅ GOOD: Our library approach (30 lines of clean code)
-function UserDashboard({ userId }: { userId: string }) {
-  const { data: user, isLoading: userLoading, error: userError } = useData(
-    `user-${userId}`,
-    async (signal) => {
-      const response = await fetch(`/api/users/${userId}`, { signal });
-      return response.json();
-    }
-  );
-
-  const { data: posts, isLoading: postsLoading, error: postsError } = useData(
-    `user-posts-${userId}`,
-    async (signal) => {
-      const response = await fetch(`/api/users/${userId}/posts`, { signal });
-      return response.json();
-    }
-  );
-
-  const { data: comments, isLoading: commentsLoading, error: commentsError } = useData(
-    `user-comments-${userId}`,
-    async (signal) => {
-      const response = await fetch(`/api/users/${userId}/comments`, { signal });
-      return response.json();
-    }
-  );
-
-  const isLoading = userLoading || postsLoading || commentsLoading;
-  const error = userError || postsError || commentsError;
-
-  if (isLoading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error.message}</div>;
-
-  return (
-    <div>
-      <UserInfo user={user} />
-      <PostsList posts={posts} />
-      <CommentsList comments={comments} />
-    </div>
-  );
-}
-```
-

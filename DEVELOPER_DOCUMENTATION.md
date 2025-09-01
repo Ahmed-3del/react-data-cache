@@ -3,24 +3,27 @@
 ## Table of Contents
 
 1. [Architecture Overview](#architecture-overview)
-2. [Core Concepts](#core-concepts)
-3. [Module Breakdown](#module-breakdown)
-4. [Design Decisions](#design-decisions)
-5. [State Management](#state-management)
-6. [Caching Strategy](#caching-strategy)
-7. [Event System](#event-system)
-8. [Type System](#type-system)
-9. [Performance Considerations](#performance-considerations)
+2. [Core Design Principles](#core-design-principles)
+3. [Module Architecture](#module-architecture)
+4. [State Management Strategy](#state-management-strategy)
+5. [Caching Implementation](#caching-implementation)
+6. [Event System Design](#event-system-design)
+7. [Type System Architecture](#type-system-architecture)
+8. [Performance Optimizations](#performance-optimizations)
+9. [Enhancement Features](#enhancement-features)
 10. [Testing Strategy](#testing-strategy)
 11. [Contributing Guidelines](#contributing-guidelines)
 
 ## Architecture Overview
 
-This library provides a lightweight, performant data fetching solution for React applications with built-in caching, prefetching, and infinite scroll capabilities. The architecture is designed around three core principles:
+### Why This Architecture?
 
-1. **Simplicity**: Minimal API surface with sensible defaults
-2. **Performance**: Efficient caching and state management
-3. **Flexibility**: Universal adapters for different pagination patterns
+The React Data Cache Library is built around a **centralized cache system** with **event-driven updates** and **progressive enhancement**. This architecture was chosen for several key reasons:
+
+1. **Performance**: Centralized cache eliminates duplicate requests and enables efficient data sharing
+2. **Simplicity**: Event-driven updates reduce complexity compared to state management libraries
+3. **Flexibility**: Progressive enhancement allows users to start simple and add features as needed
+4. **React 18 Compatibility**: Uses `useSyncExternalStore` for concurrent features support
 
 ### Core Architecture Components
 
@@ -31,19 +34,125 @@ src/
 ├── cache.ts                 # Core caching mechanism
 ├── useData.ts              # Main data fetching hook
 ├── prefetch.ts             # Prefetching utilities
+├── enhancements.ts         # Advanced feature managers
 └── infinite-scroll/
     ├── useUniversalInfiniteQuery.ts    # Infinite scroll hook
     └── universalInfiniteCache.ts       # Infinite scroll cache
 ```
 
-## Core Concepts
+**Why this structure?**
 
-### 1. Data State Management
+- **Separation of Concerns**: Each module has a single responsibility
+- **Tree-shakable**: Users only import what they need
+- **Maintainable**: Clear boundaries between functionality
+- **Testable**: Each module can be tested in isolation
 
-The library uses a centralized cache system with the following state structure:
+## Core Design Principles
+
+### 1. Simplicity First
+
+**Why?** Complex APIs lead to confusion and bugs. Simple APIs are easier to learn, use, and maintain.
+
+**Implementation:**
 
 ```typescript
-interface DataState<T> {
+// Simple, intuitive API
+const { data, isLoading, error } = useData('key', fetchFn);
+
+// Instead of complex configuration
+const { data, isLoading, error } = useData('key', fetchFn, {
+  staleTime: 5000,
+  refetchOnMount: true,
+  retryAttempts: 3,
+  // ... many more options
+});
+```
+
+**Benefits:**
+
+- **Zero Configuration**: Works out of the box
+- **Progressive Enhancement**: Add features as needed
+- **Reduced Cognitive Load**: Developers can focus on business logic
+- **Fewer Bugs**: Less configuration means fewer configuration errors
+
+### 2. Performance by Default
+
+**Why?** Performance should not be an afterthought. Every design decision considers performance implications.
+
+**Implementation:**
+
+```typescript
+// Map-based cache for O(1) lookups
+export const dataCache = new Map<string, DataState<any>>();
+
+// AbortController for request cancellation
+const controller = new AbortController();
+const signal = newController.signal;
+
+// Event-driven updates for efficient re-renders
+window.dispatchEvent(new Event("dataFetched"));
+```
+
+**Benefits:**
+
+- **Fast Cache Lookups**: O(1) time complexity
+- **Memory Efficient**: No unnecessary object creation
+- **Request Cancellation**: Prevents memory leaks and race conditions
+- **Efficient Updates**: Only re-renders when data actually changes
+
+### 3. Universal Design
+
+**Why?** APIs come in many shapes and sizes. A universal design works with any API structure.
+
+**Implementation:**
+
+```typescript
+// Universal pagination adapters
+export const PaginationAdapters = {
+  offsetBased: <T>() => ({ /* works with page/limit */ }),
+  cursorBased: <T>() => ({ /* works with cursors */ }),
+  linkBased: <T>() => ({ /* works with next/prev URLs */ }),
+  custom: <T, R>(config) => ({ /* works with anything */ })
+};
+```
+
+**Benefits:**
+
+- **API Agnostic**: Works with any backend
+- **Reduced Boilerplate**: Pre-built adapters for common patterns
+- **Flexible**: Custom adapters for unique requirements
+- **Future Proof**: Adapts to new API patterns
+
+## Module Architecture
+
+### 1. `types.ts` - Type System Foundation
+
+**Why TypeScript?**
+TypeScript provides compile-time safety, better IDE support, and self-documenting code.
+
+**Key Design Decisions:**
+
+#### Generic Type Parameters
+
+```typescript
+export function useData<T>(
+  key: string,
+  fn: FetchFunction<T>,
+  options: UseDataOptions = {}
+): UseDataResponse<T>
+```
+
+**Why generics?**
+
+- **Type Safety**: Prevents runtime type errors
+- **IntelliSense**: Better IDE autocomplete
+- **Self-Documenting**: Types serve as documentation
+- **Flexibility**: Works with any data type
+
+#### Strict Interfaces
+
+```typescript
+export interface DataState<T> {
   status: "idle" | "loading" | "success" | "error" | "isRefetching";
   payload: T | null;
   controller?: AbortController;
@@ -51,75 +160,53 @@ interface DataState<T> {
 }
 ```
 
-**Why this design?**
+**Why strict interfaces?**
 
-- **Status-based**: Clear state transitions for UI rendering
-- **AbortController**: Proper request cancellation for performance
-- **Timestamp**: Enables stale-time based refetching
-- **Payload**: Stores both success data and error information
+- **Compile-time Errors**: Catch bugs before runtime
+- **API Contract**: Clear expectations for data structure
+- **Refactoring Safety**: TypeScript catches breaking changes
+- **Documentation**: Interfaces serve as living documentation
 
-### 2. Cache Strategy
+#### Optional Properties with Sensible Defaults
 
-The library implements a Map-based cache system:
+```typescript
+export interface UseDataOptions {
+  staleTime?: number;        // Default: 5 seconds
+  refetchOnMount?: boolean;   // Default: false
+  noCache?: boolean;         // Default: false
+}
+```
+
+**Why optional properties?**
+
+- **Backward Compatibility**: New options don't break existing code
+- **Progressive Enhancement**: Users can add features incrementally
+- **Sensible Defaults**: Works without configuration
+- **Flexibility**: Users can override defaults when needed
+
+### 2. `cache.ts` - Core Caching Mechanism
+
+**Why Map-based Cache?**
 
 ```typescript
 export const dataCache = new Map<string, DataState<any>>();
 ```
 
-**Design Rationale:**
+**Benefits:**
 
-- **String keys**: Simple, predictable cache invalidation
-- **Map structure**: O(1) lookup performance
-- **Global scope**: Enables cross-component data sharing
-- **Type safety**: Generic typing for compile-time safety
+- **O(1) Lookup**: Constant time complexity
+- **Memory Efficient**: No hash collisions or rehashing
+- **Simple API**: Standard Map methods
+- **Iterable**: Easy to iterate over cache entries
+- **No External Dependencies**: Built into JavaScript
 
-### 3. Event-Driven Updates
+**Alternative Considered:**
 
-The library uses DOM events for state synchronization:
+- **Object-based cache**: `{}` - Slower lookups, no iteration
+- **WeakMap**: Garbage collection issues with string keys
+- **Custom implementation**: Unnecessary complexity
 
-```typescript
-window.addEventListener("dataFetched", callback);
-window.dispatchEvent(new Event("dataFetched"));
-```
-
-**Why DOM events?**
-
-- **Cross-component**: Updates all subscribed components simultaneously
-- **Lightweight**: No external dependencies
-- **Browser native**: No additional event system needed
-- **React 18 compatible**: Works with concurrent features
-
-## Module Breakdown
-
-### 1. `types.ts` - Type System Foundation
-
-This module defines the core type system that ensures type safety across the entire library.
-
-**Key Types:**
-
-- `FetchFunction<T>`: Standardized fetch function signature
-- `DataState<T>`: Cache entry state structure
-- `UseDataOptions`: Configuration options for data fetching
-- `UniversalInfiniteOptions<TData, TPageParam>`: Infinite scroll configuration
-
-**Design Decisions:**
-
-- **Generic typing**: Maximum flexibility for different data types
-- **Strict interfaces**: Compile-time error prevention
-- **Optional properties**: Sensible defaults with customization options
-
-### 2. `cache.ts` - Core Caching Mechanism
-
-The cache module provides the foundation for all data storage and state management.
-
-**Key Functions:**
-
-- `subscribe()`: Event subscription for state updates
-- `fetchOrUsePreloadedData()`: Handles initial data loading
-- `formatDataResponse()`: Transforms cache state to hook response
-- `clearDataCache()`: Cache invalidation utility
-
-**Implementation Details:**
+#### Event-Driven Updates
 
 ```typescript
 export function subscribe(callback: () => void) {
@@ -128,114 +215,49 @@ export function subscribe(callback: () => void) {
 }
 ```
 
-**Why this approach?**
+**Why DOM events?**
 
-- **Event-driven**: Efficient updates across multiple components
-- **Cleanup**: Proper event listener removal prevents memory leaks
-- **Synchronous**: Immediate state propagation
+- **Cross-Component**: Updates all subscribed components simultaneously
+- **Lightweight**: No external event system needed
+- **Browser Native**: Leverages built-in browser capabilities
+- **React 18 Compatible**: Works with concurrent features
+- **Simple**: No complex state management required
+
+**Alternative Considered:**
+
+- **Custom event system**: Unnecessary complexity
+- **React Context**: Performance issues with frequent updates
+- **State management library**: Adds dependencies and complexity
+
+#### State Lifecycle Management
+
+```typescript
+export function formatDataResponse<T>(
+  { status, payload }: DataState<T>,
+  key: string,
+  fn: FetchFunction<T>
+) {
+  const statusResponse: Record<string, any> = {
+    idle: { isLoading: true },
+    loading: { isLoading: true },
+    success: { data: payload },
+    error: { error: payload },
+    isRefetching: { isRefetching: true, data: payload }
+  };
+  return statusResponse[status];
+}
+```
+
+**Why status-based state?**
+
+- **Predictable**: Clear state transitions
+- **UI Friendly**: Each status maps to UI state
+- **Debuggable**: Easy to understand current state
+- **Extensible**: Easy to add new states
 
 ### 3. `useData.ts` - Main Data Fetching Hook
 
-The primary hook that provides data fetching capabilities with caching.
-
-**Core Logic:**
-
-```typescript
-export function useData<T>(
-  key: string,
-  fn: FetchFunction<T>,
-  options: UseDataOptions = {}
-): UseDataResponse<T>;
-```
-
-**Key Features:**
-
-- **Automatic initialization**: Creates cache entry if not exists
-- **Stale-time checking**: Intelligent refetching based on data age
-- **Refetch on mount**: Optional automatic refetching
-- **No-cache mode**: Bypass caching when needed
-
-**State Management Flow:**
-
-1. Check if cache entry exists
-2. Subscribe to state updates
-3. Check if data is stale
-4. Trigger fetch if needed
-5. Return formatted response
-
-### 4. `prefetch.ts` - Prefetching Utilities
-
-Provides utilities for proactive data loading and optimization.
-
-**Key Functions:**
-
-- `prefetchData()`: Preload data for a specific key
-- `prefetchMulti()`: Batch prefetch multiple data sources
-- `prefetchOnEvent()`: Event-triggered prefetching
-
-**Use Cases:**
-
-- **Route-based prefetching**: Load data before navigation
-- **Hover prefetching**: Load data on user interaction
-- **Background updates**: Keep data fresh without blocking UI
-
-### 5. Infinite Scroll Module
-
-The infinite scroll functionality is built with universal pagination support.
-
-#### `useUniversalInfiniteQuery.ts`
-
-**Core Features:**
-
-- **Universal pagination**: Supports offset, cursor, and link-based pagination
-- **Bidirectional loading**: Load both next and previous pages
-- **Built-in adapters**: Common pagination patterns pre-configured
-- **Custom adapters**: Flexible configuration for any API
-
-**Adapter System:**
-
-```typescript
-export const PaginationAdapters = {
-  offsetBased: <T>() => ({
-    /* offset pagination config */
-  }),
-  cursorBased: <T>() => ({
-    /* cursor pagination config */
-  }),
-  linkBased: <T>() => ({
-    /* link pagination config */
-  }),
-  skipTotal: <T>(limit: number) => ({
-    /* skip/total config */
-  }),
-  custom: <T, R>(config) => ({
-    /* custom config */
-  }),
-};
-```
-
-**Why Universal Design?**
-
-- **API agnostic**: Works with any pagination pattern
-- **Reduced boilerplate**: Pre-built adapters for common cases
-- **Flexible**: Custom adapters for unique requirements
-- **Type safe**: Full TypeScript support
-
-#### `universalInfiniteCache.ts`
-
-Separate cache system for infinite scroll data to avoid conflicts with regular data cache.
-
-**Key Features:**
-
-- **Page-based storage**: Maintains array of page responses
-- **Parameter tracking**: Stores page parameters for navigation
-- **Bidirectional support**: Handles both forward and backward pagination
-
-## Design Decisions
-
-### 1. Why `useSyncExternalStore`?
-
-The library uses React's `useSyncExternalStore` for state management:
+**Why `useSyncExternalStore`?**
 
 ```typescript
 const data = useSyncExternalStore(
@@ -246,63 +268,133 @@ const data = useSyncExternalStore(
 
 **Benefits:**
 
-- **React 18 compatible**: Works with concurrent features
-- **External state**: No React state management overhead
-- **Efficient updates**: Only re-renders when data actually changes
-- **SSR friendly**: Proper hydration support
+- **React 18 Compatible**: Works with concurrent features
+- **External State**: No React state management overhead
+- **Efficient Updates**: Only re-renders when data changes
+- **SSR Friendly**: Proper hydration support
+- **Future Proof**: React's recommended approach
 
-### 2. AbortController Integration
+**Alternative Considered:**
 
-Every fetch operation uses AbortController for proper request cancellation:
+- **useState + useEffect**: Performance issues, complex state management
+- **useReducer**: Overkill for simple state
+- **Custom hook**: Would need to reimplement React's optimizations
+
+#### Stale-Time Logic
 
 ```typescript
-const controller = new AbortController();
-const signal = newController.signal;
+const isStale = Date.now() - (data.timestamp || 0) > (options.staleTime ?? defaultStaleTime);
 ```
 
-**Why this matters:**
+**Why timestamp-based staleness?**
 
-- **Performance**: Prevents unnecessary network requests
-- **Memory management**: Avoids memory leaks from abandoned requests
-- **User experience**: Responsive UI during rapid interactions
-- **Resource efficiency**: Reduces server load
+- **Simple**: Easy to understand and debug
+- **Accurate**: Based on actual time elapsed
+- **Configurable**: Different stale times for different data
+- **Performance**: Avoids unnecessary refetches
 
-### 3. Stale-Time Based Refetching
+**Alternative Considered:**
 
-The library implements intelligent refetching based on data age:
+- **Version-based**: Complex to implement and maintain
+- **Hash-based**: Expensive to compute
+- **Manual invalidation**: Requires user intervention
+
+### 4. `prefetch.ts` - Prefetching Utilities
+
+**Why Separate Prefetching?**
+Prefetching is a distinct concern from data fetching. Separation allows for:
+
+- **Reusability**: Prefetching can be used independently
+- **Flexibility**: Different prefetching strategies
+- **Performance**: Optimized for different use cases
+- **Testing**: Can be tested in isolation
+
+#### Request Cancellation
 
 ```typescript
-const isStale =
-  Date.now() - (data.timestamp || 0) > (options.staleTime ?? defaultStaleTime);
+const existingController = dataCache.get(key)?.controller;
+if (existingController && dataCache.get(key)?.status === "loading") {
+  existingController.abort();
+}
+```
+
+**Why AbortController?**
+
+- **Standard API**: Built into browsers
+- **Memory Management**: Prevents memory leaks
+- **Performance**: Stops unnecessary network requests
+- **User Experience**: Responsive UI during rapid interactions
+
+**Alternative Considered:**
+
+- **Custom cancellation**: Would need to reimplement browser functionality
+- **Timeout-based**: Less reliable than AbortController
+- **No cancellation**: Would cause memory leaks and race conditions
+
+### 5. `enhancements.ts` - Advanced Feature Managers
+
+**Why Class-Based Managers?**
+
+```typescript
+export class RetryManager {
+  private config: RetryConfig;
+  private currentAttempt = 0;
+  
+  async execute<T>(fn: () => Promise<T>): Promise<T> {
+    // Implementation
+  }
+}
 ```
 
 **Benefits:**
 
-- **Fresh data**: Ensures data is reasonably current
-- **Performance**: Avoids unnecessary refetches
-- **Configurable**: Different stale times for different data types
-- **User control**: Manual refetch capability
+- **Encapsulation**: Internal state is protected
+- **Reusability**: Can be used across different contexts
+- **Testability**: Easy to mock and test
+- **Extensibility**: Easy to add new methods
+- **Type Safety**: Better TypeScript support
 
-### 4. Event-Driven Architecture
+**Alternative Considered:**
 
-Using DOM events for state synchronization:
+- **Function-based**: Would need to pass state around
+- **Singleton**: Would prevent multiple instances
+- **React hooks**: Would tie to React lifecycle
 
-**Advantages:**
+#### Exponential Backoff
 
-- **Cross-component**: Updates all subscribed components
-- **Decoupled**: Components don't need direct references
-- **Efficient**: No polling or manual synchronization needed
-- **Simple**: No external event system required
+```typescript
+const delay = this.config.exponentialBackoff 
+  ? this.config.delay * Math.pow(2, this.currentAttempt - 1)
+  : this.config.delay;
+```
 
-## State Management
+**Why exponential backoff?**
 
-### Cache State Lifecycle
+- **Network Friendly**: Reduces server load during outages
+- **User Experience**: Faster recovery when issues are resolved
+- **Standard Practice**: Industry standard for retry logic
+- **Configurable**: Can be disabled for different use cases
 
-1. **Idle**: Initial state, no data loaded
-2. **Loading**: Fetch in progress
-3. **Success**: Data loaded successfully
-4. **Error**: Fetch failed
-5. **IsRefetching**: Refetch in progress (preserves existing data)
+## State Management Strategy
+
+### Why Centralized State?
+
+**Benefits:**
+
+- **Data Sharing**: Multiple components can share the same data
+- **Performance**: Eliminates duplicate requests
+- **Consistency**: All components see the same data
+- **Memory Efficiency**: Single source of truth
+
+**Implementation:**
+
+```typescript
+// Global cache shared across all components
+export const dataCache = new Map<string, DataState<any>>();
+
+// Event-driven updates ensure consistency
+window.dispatchEvent(new Event("dataFetched"));
+```
 
 ### State Transitions
 
@@ -314,61 +406,77 @@ error ← error ← error
 isRefetching → success
 ```
 
-### Infinite Scroll State
+**Why these states?**
 
-Additional states for infinite scroll:
+- **idle**: Initial state, no data loaded
+- **loading**: Fetch in progress, show loading UI
+- **success**: Data loaded successfully, show data
+- **error**: Fetch failed, show error UI
+- **isRefetching**: Refetch in progress, preserve existing data
 
-- **fetchingNextPage**: Loading next page
-- **fetchingPreviousPage**: Loading previous page
+**Benefits:**
 
-## Caching Strategy
+- **Predictable**: Clear state transitions
+- **UI Friendly**: Each state maps to UI behavior
+- **Debuggable**: Easy to understand current state
+- **User Experience**: Preserves data during refetches
+
+## Caching Implementation
 
 ### Cache Key Strategy
 
-Cache keys are strings that should be:
-
-- **Unique**: Different data sources have different keys
-- **Predictable**: Same data source always uses same key
-- **Descriptive**: Should indicate what data is cached
-
-**Examples:**
+**Why String Keys?**
 
 ```typescript
-"user-profile-123";
-"posts-page-1";
-"comments-post-456";
+// Good cache keys
+"user-profile-123"
+"posts-page-1"
+"comments-post-456"
 ```
+
+**Benefits:**
+
+- **Simple**: Easy to understand and debug
+- **Predictable**: Same data always uses same key
+- **Descriptive**: Keys indicate what data is cached
+- **Flexible**: Can include any information in key
+
+**Best Practices:**
+
+- **Unique**: Different data sources have different keys
+- **Stable**: Keys don't change between renders
+- **Descriptive**: Keys should indicate data content
+- **Hierarchical**: Use separators for related data
 
 ### Cache Invalidation
 
-The library provides several invalidation strategies:
+**Strategies:**
 
-1. **Manual invalidation**: `clearDataCache()`
-2. **Stale-time based**: Automatic refetching
-3. **No-cache mode**: Bypass cache entirely
-4. **Refetch on mount**: Force refresh when component mounts
+1. **Stale-Time Based**: Automatic invalidation after time period
+2. **Manual Invalidation**: User-triggered cache clearing
+3. **No-Cache Mode**: Bypass cache entirely
+4. **Refetch on Mount**: Force refresh when component mounts
 
-### Memory Management
+**Why Multiple Strategies?**
 
-- **Map-based storage**: Efficient memory usage
-- **AbortController**: Prevents memory leaks from abandoned requests
-- **Event cleanup**: Proper event listener removal
-- **No size limits**: Relies on application-level cache management
+- **Flexibility**: Different use cases need different strategies
+- **Performance**: Avoid unnecessary network requests
+- **User Control**: Users can override default behavior
+- **Real-time Data**: Some data needs frequent updates
 
-## Event System
+## Event System Design
 
-### Event Types
+### Why DOM Events?
 
-1. **dataFetched**: Regular data cache updates
-2. **universalInfiniteDataFetched**: Infinite scroll cache updates
+**Benefits:**
 
-### Event Flow
+- **Cross-Component**: Updates all subscribed components
+- **Decoupled**: Components don't need direct references
+- **Efficient**: No polling or manual synchronization
+- **Simple**: No external event system required
+- **Browser Native**: Leverages built-in capabilities
 
-```
-Data Fetch → Cache Update → Event Dispatch → Component Re-render
-```
-
-### Event Handling
+**Implementation:**
 
 ```typescript
 // Subscribe to updates
@@ -380,137 +488,372 @@ const unsubscribe = subscribe(() => {
 return unsubscribe;
 ```
 
-## Type System
+**Alternative Considered:**
+
+- **Custom event system**: Unnecessary complexity
+- **React Context**: Performance issues with frequent updates
+- **State management library**: Adds dependencies
+- **Polling**: Inefficient and resource intensive
+
+### Event Types
+
+1. **dataFetched**: Regular data cache updates
+2. **universalInfiniteDataFetched**: Infinite scroll cache updates
+
+**Why Separate Events?**
+
+- **Performance**: Only update relevant components
+- **Clarity**: Clear separation of concerns
+- **Debugging**: Easier to track event flow
+- **Extensibility**: Easy to add new event types
+
+## Type System Architecture
 
 ### Generic Type Parameters
 
-The library uses extensive generic typing for type safety:
+**Why Extensive Generics?**
 
 ```typescript
 function useData<T>(
   key: string,
   fn: FetchFunction<T>,
   options: UseDataOptions = {}
-): UseDataResponse<T>;
+): UseDataResponse<T>
 ```
+
+**Benefits:**
+
+- **Type Safety**: Prevents runtime type errors
+- **IntelliSense**: Better IDE autocomplete
+- **Self-Documenting**: Types serve as documentation
+- **Flexibility**: Works with any data type
+- **Refactoring Safety**: TypeScript catches breaking changes
 
 ### Type Constraints
 
-- **T**: Data type (any)
-- **TResponse**: API response type (any)
-- **TPageParam**: Page parameter type (any)
+**Why Flexible Constraints?**
+
+```typescript
+// T: Data type (any)
+// TResponse: API response type (any)
+// TPageParam: Page parameter type (any)
+```
+
+**Benefits:**
+
+- **Universal**: Works with any API structure
+- **Flexible**: No assumptions about data shape
+- **Extensible**: Easy to add new data types
+- **Future Proof**: Adapts to new API patterns
 
 ### Type Inference
 
-TypeScript automatically infers types from usage:
+**Why Automatic Inference?**
 
 ```typescript
 const { data } = useData("users", fetchUsers);
 // data is automatically typed as User[]
 ```
 
-## Performance Considerations
+**Benefits:**
+
+- **Less Boilerplate**: No manual type annotations
+- **Reduced Errors**: TypeScript infers correct types
+- **Better DX**: Less code to write and maintain
+- **Consistency**: Types are always correct
+
+## Performance Optimizations
 
 ### 1. Efficient Re-renders
 
-- **useSyncExternalStore**: Only re-renders when data changes
-- **Event-driven updates**: No polling or manual synchronization
-- **AbortController**: Prevents unnecessary network requests
+**Why `useSyncExternalStore`?**
+
+- **React 18 Compatible**: Works with concurrent features
+- **External State**: No React state management overhead
+- **Efficient Updates**: Only re-renders when data changes
+- **SSR Friendly**: Proper hydration support
 
 ### 2. Memory Optimization
 
-- **Map-based cache**: O(1) lookup performance
-- **Event cleanup**: Proper memory management
-- **Request cancellation**: Prevents memory leaks
+**Why Map-based Cache?**
+
+- **O(1) Lookup**: Constant time complexity
+- **Memory Efficient**: No hash collisions or rehashing
+- **Simple API**: Standard Map methods
+- **No External Dependencies**: Built into JavaScript
+
+**Why AbortController?**
+
+- **Memory Management**: Prevents memory leaks
+- **Performance**: Stops unnecessary network requests
+- **Standard API**: Built into browsers
+- **User Experience**: Responsive UI during rapid interactions
 
 ### 3. Network Optimization
 
-- **Stale-time control**: Reduces unnecessary requests
-- **Prefetching**: Proactive data loading
-- **Request deduplication**: Same key requests are shared
+**Why Request Deduplication?**
 
-### 4. Bundle Size
+- **Performance**: Eliminates duplicate requests
+- **Server Load**: Reduces server load
+- **User Experience**: Faster response times
+- **Consistency**: All components see same data
 
-- **No external dependencies**: Minimal bundle impact
-- **Tree-shakable**: Only import what you use
-- **TypeScript**: Compile-time optimizations
+**Why Stale-Time Control?**
+
+- **Performance**: Avoids unnecessary refetches
+- **User Experience**: Faster loading times
+- **Server Load**: Reduces server load
+- **Configurable**: Different stale times for different data
+
+### 4. Bundle Size Optimization
+
+**Why Tree-shakable Design?**
+
+- **Performance**: Smaller bundle sizes
+- **Flexibility**: Users only import what they need
+- **Maintainability**: Clear module boundaries
+- **Future Proof**: Easy to add new features
+
+## Enhancement Features
+
+### 1. Optimistic Updates
+
+**Why Built-in Optimistic Updates?**
+
+```typescript
+const { data, updateOptimistically } = useData(
+  'post-123',
+  fetchPost,
+  { optimisticUpdates: true }
+);
+
+const handleLike = () => {
+  updateOptimistically(
+    { likes: data.likes + 1 },
+    async () => {
+      await fetch('/api/posts/123/like', { method: 'POST' });
+    }
+  );
+};
+```
+
+**Benefits:**
+
+- **Instant Feedback**: UI updates immediately
+- **Better UX**: Users see immediate response
+- **Automatic Rollback**: Handles errors gracefully
+- **Simple API**: Easy to implement
+
+**Why Automatic Rollback?**
+
+- **Error Handling**: Graceful error recovery
+- **Data Consistency**: Ensures data integrity
+- **User Experience**: Clear error feedback
+- **Reliability**: Robust error handling
+
+### 2. Advanced Retry Logic
+
+**Why Exponential Backoff?**
+
+```typescript
+const delay = this.config.exponentialBackoff 
+  ? this.config.delay * Math.pow(2, this.currentAttempt - 1)
+  : this.config.delay;
+```
+
+**Benefits:**
+
+- **Network Friendly**: Reduces server load during outages
+- **User Experience**: Faster recovery when issues are resolved
+- **Standard Practice**: Industry standard for retry logic
+- **Configurable**: Can be disabled for different use cases
+
+**Why Custom Error Handlers?**
+
+- **Flexibility**: Different error handling for different scenarios
+- **Debugging**: Better error tracking and logging
+- **User Experience**: Custom error messages and recovery
+- **Monitoring**: Integration with error tracking services
+
+### 3. Background Sync
+
+**Why Built-in Offline Support?**
+
+```typescript
+const { data, syncStatus } = useData(
+  'posts',
+  fetchPosts,
+  {
+    backgroundSync: true,
+    offlineSupport: true
+  }
+);
+```
+
+**Benefits:**
+
+- **Offline Experience**: Works without internet
+- **Background Sync**: Syncs when connection returns
+- **User Experience**: Seamless offline/online transition
+- **Reliability**: Robust network handling
+
+**Why Network Status Detection?**
+
+- **User Experience**: Clear offline/online indicators
+- **Performance**: Optimize for network conditions
+- **Reliability**: Handle network changes gracefully
+- **Debugging**: Better network issue diagnosis
+
+### 4. Real-time Subscriptions
+
+**Why WebSocket Integration?**
+
+```typescript
+const { data, isConnected } = useData(
+  'live-chat',
+  fetchChat,
+  {
+    realtime: true,
+    subscriptionUrl: 'ws://api.example.com/chat'
+  }
+);
+```
+
+**Benefits:**
+
+- **Real-time Updates**: Live data without polling
+- **Performance**: More efficient than polling
+- **User Experience**: Instant updates
+- **Automatic Reconnection**: Handles connection issues
+
+**Why Automatic Reconnection?**
+
+- **Reliability**: Handles network issues gracefully
+- **User Experience**: Seamless connection recovery
+- **Performance**: Optimized reconnection strategy
+- **Debugging**: Better connection issue diagnosis
+
+### 5. Performance Monitoring
+
+**Why Built-in Metrics?**
+
+```typescript
+const { data, metrics } = useData(
+  'posts',
+  fetchPosts,
+  {
+    enableMetrics: true,
+    onMetrics: (metrics) => {
+      analytics.track('data_fetch_metrics', metrics);
+    }
+  }
+);
+```
+
+**Benefits:**
+
+- **Performance Insights**: Track performance issues
+- **Optimization**: Data-driven performance improvements
+- **Monitoring**: Production performance monitoring
+- **Debugging**: Better performance issue diagnosis
+
+**Why Cache Hit Rate Tracking?**
+
+- **Performance**: Identify caching effectiveness
+- **Optimization**: Optimize cache strategies
+- **Monitoring**: Track cache performance
+- **Debugging**: Cache-related issue diagnosis
 
 ## Testing Strategy
 
 ### Unit Testing
 
-Test each module in isolation:
+**Why Test Each Module?**
+
+- **Reliability**: Ensure each module works correctly
+- **Maintainability**: Catch regressions during development
+- **Documentation**: Tests serve as living documentation
+- **Refactoring**: Safe refactoring with test coverage
+
+**Test Structure:**
 
 ```typescript
-// Test cache operations
-describe("cache", () => {
-  it("should store and retrieve data", () => {
-    // Test implementation
+describe('cache', () => {
+  it('should store and retrieve data', () => {
+    // Test cache operations
   });
-});
-
-// Test hook behavior
-describe("useData", () => {
-  it("should fetch data on mount", () => {
-    // Test implementation
+  
+  it('should handle state transitions', () => {
+    // Test state management
+  });
+  
+  it('should emit events on updates', () => {
+    // Test event system
   });
 });
 ```
 
 ### Integration Testing
 
-Test component integration:
+**Why Integration Tests?**
 
-```typescript
-describe("Component Integration", () => {
-  it("should update UI when data changes", () => {
-    // Test implementation
-  });
-});
-```
+- **End-to-End**: Test complete workflows
+- **Real-world Usage**: Test actual usage patterns
+- **Regression Testing**: Catch integration issues
+- **Documentation**: Examples of real usage
 
 ### Performance Testing
 
-- **Memory usage**: Monitor for leaks
-- **Network requests**: Verify request optimization
-- **Re-render frequency**: Ensure efficient updates
+**Why Performance Tests?**
+
+- **Performance Regression**: Catch performance issues
+- **Optimization**: Measure optimization effectiveness
+- **Benchmarking**: Compare with alternatives
+- **Monitoring**: Track performance over time
 
 ## Contributing Guidelines
 
 ### Code Style
 
-- **TypeScript**: Strict typing required
-- **ESLint**: Follow project linting rules
-- **Prettier**: Consistent code formatting
-- **JSDoc**: Document public APIs
+**Why TypeScript?**
+
+- **Type Safety**: Prevent runtime errors
+- **Better DX**: Better IDE support
+- **Documentation**: Types serve as documentation
+- **Maintainability**: Easier to maintain and refactor
+
+**Why ESLint?**
+
+- **Consistency**: Consistent code style
+- **Quality**: Catch common errors
+- **Maintainability**: Easier to read and maintain
+- **Team Collaboration**: Consistent code across team
 
 ### Architecture Principles
 
-1. **Simplicity**: Keep APIs simple and intuitive
-2. **Performance**: Optimize for speed and efficiency
-3. **Type Safety**: Maintain strict TypeScript usage
-4. **Backward Compatibility**: Avoid breaking changes
+**Why These Principles?**
+
+1. **Simplicity**: Complex code is harder to maintain
+2. **Performance**: Performance should not be an afterthought
+3. **Type Safety**: TypeScript provides compile-time safety
+4. **Backward Compatibility**: Don't break existing code
 
 ### Testing Requirements
 
-- **Unit tests**: Cover all public APIs
-- **Integration tests**: Test component integration
-- **Performance tests**: Monitor for regressions
-- **Type tests**: Ensure type safety
+**Why Comprehensive Testing?**
+
+- **Reliability**: Ensure library works correctly
+- **Maintainability**: Safe refactoring and changes
+- **Documentation**: Tests serve as examples
+- **Quality**: High-quality, production-ready code
 
 ### Documentation
 
-- **API documentation**: Document all public functions
-- **Examples**: Provide usage examples
-- **Migration guides**: Help with version updates
-- **Performance tips**: Guide for optimal usage
+**Why Comprehensive Documentation?**
 
-### Pull Request Process
-
-1. **Feature branch**: Create from main
-2. **Tests**: Ensure all tests pass
-3. **Documentation**: Update relevant docs
-4. **Review**: Get approval from maintainers
-5. **Merge**: Squash and merge to main
+- **Onboarding**: Help new contributors
+- **Maintenance**: Easier to maintain and update
+- **User Support**: Better user experience
+- **Community**: Foster community contribution
 
 This developer documentation provides a comprehensive understanding of the library's architecture, design decisions, and implementation details. It serves as a guide for contributors and maintainers to understand the codebase and make informed decisions about future development.

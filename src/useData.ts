@@ -2,8 +2,8 @@ import { useSyncExternalStore, useEffect, useRef } from "react";
 import { DataState, UseDataOptions, UseDataResponse, FetchFunction } from "./types";
 import { subscribe, fetchOrUsePreloadedData, formatDataResponse, dataCache, performanceMonitor } from "./cache";
 import { prefetchData } from "./prefetch";
-import { 
-  createRetryManager, 
+import {
+  createRetryManager,
   createOptimisticUpdateManager,
   createBackgroundSyncManager,
   createRealtimeManager,
@@ -22,12 +22,10 @@ export function useData<T>(
   fn: FetchFunction<T>,
   options: UseDataOptions = {}
 ): UseDataResponse<T> {
-  // Initialize cache entry
   if (!dataCache.has(key)) {
     dataCache.set(key, { status: "idle", payload: null } as DataState<T>);
   }
 
-  // Enhancement managers
   const retryManagerRef = useRef<RetryManager | null>(null);
   const optimisticManagerRef = useRef<OptimisticUpdateManager<T> | null>(null);
   const backgroundSyncRef = useRef<BackgroundSyncManager | null>(null);
@@ -86,21 +84,17 @@ export function useData<T>(
     dataCache.delete(key);
   }
 
-  // Initial fetch
   if (data.status === "idle") {
     fetchOrUsePreloadedData(key, fn);
   }
 
-  // Refetch on mount if stale
   if (options.refetchOnMount && data.status === "success" && isStale) {
     prefetchData(key, fn, { refetching: true });
   }
-
-  // Background sync setup
   useEffect(() => {
     if (options.backgroundSync && backgroundSyncRef.current) {
       backgroundSyncRef.current.startSync();
-      
+
       return () => {
         backgroundSyncRef.current?.stopSync();
       };
@@ -111,7 +105,7 @@ export function useData<T>(
   useEffect(() => {
     if (options.realtime && realtimeRef.current) {
       realtimeRef.current.connect();
-      
+
       return () => {
         realtimeRef.current?.disconnect();
       };
@@ -124,23 +118,20 @@ export function useData<T>(
       const handleMetrics = (metrics: any) => {
         options.onMetrics?.(metrics);
       };
-      
-      // Set up metrics tracking
+
       const interval = setInterval(() => {
         const metrics = performanceMonitor.getMetrics();
         handleMetrics(metrics);
       }, 5000); // Report metrics every 5 seconds
-      
+
       return () => clearInterval(interval);
     }
   }, [options.enableMetrics, options.onMetrics]);
 
-  // Enhanced response with all features
   const baseResponse = formatDataResponse<T>(data, key, fn, options);
-  
+
   return {
     ...baseResponse,
-    // Enhanced retry functionality
     retry: () => {
       if (retryManagerRef.current) {
         retryManagerRef.current.reset();
@@ -148,8 +139,8 @@ export function useData<T>(
       baseResponse.refetch();
     },
     retryCount: data.retryCount || 0,
-    
-    // Enhanced optimistic updates
+
+    // Optimistic updates
     updateOptimistically: (optimisticData: Partial<T>, mutationFn: () => Promise<void>) => {
       if (optimisticManagerRef.current && data.status === "success") {
         optimisticManagerRef.current.updateOptimistically(
@@ -168,13 +159,13 @@ export function useData<T>(
         );
       }
     },
-    
+
     // Background sync status
     syncStatus: data.syncStatus || "online",
-    
+
     // Real-time connection status
     isConnected: realtimeRef.current?.isConnected() || true,
-    
+
     // Performance metrics
     metrics: data.metrics || performanceMonitor.getMetrics()
   };

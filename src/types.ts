@@ -77,7 +77,7 @@ export interface UniversalInfiniteOptions<TData, TPageParam = any> {
   staleTime?: number;
   refetchOnMount?: boolean;
   enabled?: boolean;
-  
+
   // High Priority Enhancements
   optimisticUpdates?: boolean;
   retryAttempts?: number;
@@ -86,7 +86,7 @@ export interface UniversalInfiniteOptions<TData, TPageParam = any> {
   onError?: (error: any, attempt: number) => void;
   backgroundSync?: boolean;
   offlineSupport?: boolean;
-  
+
   // Medium Priority Enhancements
   realtime?: boolean;
   subscriptionUrl?: string;

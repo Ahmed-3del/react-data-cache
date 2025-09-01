@@ -16,14 +16,38 @@ A lightweight, performant React library for data fetching with built-in caching,
 ### 🆕 **NEW: Advanced Features**
 
 #### **High Priority Enhancements**
+
 - **🎯 Optimistic Updates** - Instant UI updates with automatic rollback
 - **🔄 Advanced Retry Logic** - Exponential backoff with custom error handling
 - **📱 Background Sync** - Offline support with automatic synchronization
 
 #### **Medium Priority Enhancements**
+
 - **🔌 Real-time Subscriptions** - WebSocket integration for live updates
 - **💾 Advanced Caching** - Multiple cache strategies (stale-while-revalidate, cache-first, etc.)
 - **📊 Performance Monitoring** - Built-in metrics and analytics
+
+## 📊 **Comparison with SWR**
+
+| Feature | React Data Cache | SWR |
+|---------|------------------|-----|
+| **Bundle Size** | ~15KB (gzipped) | ~12KB (gzipped) |
+| **Advanced Features** | ✅ Built-in | ⚠️ Manual implementation |
+| **Real-time Support** | ✅ WebSocket | ❌ Polling only |
+| **Offline Support** | ✅ Built-in | ❌ Manual setup |
+| **Performance Monitoring** | ✅ Built-in | ❌ Manual tracking |
+| **React Suspense** | ❌ Not yet | ✅ Native support |
+| **DevTools** | ❌ Not yet | ✅ Built-in |
+
+**[📖 Detailed Comparison with SWR](./COMPARISON_WITH_SWR.md)** - Comprehensive feature-by-feature analysis
+
+**Why Choose React Data Cache?**
+
+- 🚀 **More Advanced Features** out of the box
+- 🔌 **Real-time Support** with WebSocket integration
+- 📱 **Offline Support** with background sync
+- 📊 **Performance Monitoring** built-in
+- 🎯 **Universal Pagination** for any API pattern
 
 ## 📦 Installation
 
@@ -245,6 +269,7 @@ function MonitoredDataFetch() {
 
 - **[User Documentation](./USER_DOCUMENTATION.md)** - Complete guide for using the library
 - **[Developer Documentation](./DEVELOPER_DOCUMENTATION.md)** - Architecture and implementation details
+- **[Comparison with SWR](./COMPARISON_WITH_SWR.md)** - Detailed feature comparison
 
 ## 🔧 Core API
 
@@ -366,21 +391,25 @@ const cleanup = prefetchInBackground('live-data', fetchLiveData, 30000);
 The library provides pre-built adapters for common pagination patterns:
 
 ### Offset-Based Pagination
+
 ```typescript
 PaginationAdapters.offsetBased<Post>()
 ```
 
 ### Cursor-Based Pagination
+
 ```typescript
 PaginationAdapters.cursorBased<Post>()
 ```
 
 ### Link-Based Pagination
+
 ```typescript
 PaginationAdapters.linkBased<Post>()
 ```
 
 ### Custom Adapter
+
 ```typescript
 PaginationAdapters.custom<Post>({
   selectData: (response) => response.items,
@@ -414,6 +443,7 @@ The library uses a centralized cache system with the following states:
 ## 🛠️ Advanced Usage
 
 ### Conditional Fetching
+
 ```typescript
 const { data } = useData(
   `user-${userId}`,
@@ -423,6 +453,7 @@ const { data } = useData(
 ```
 
 ### Optimistic Updates
+
 ```typescript
 const handleLike = () => {
   updateOptimistically(
@@ -435,6 +466,7 @@ const handleLike = () => {
 ```
 
 ### Background Refetching
+
 ```typescript
 useEffect(() => {
   const interval = setInterval(refetch, 60000); // Refetch every minute
@@ -445,11 +477,13 @@ useEffect(() => {
 ## 🔧 Configuration Options
 
 ### `useData` Options
+
 - `staleTime` - How long data is considered fresh (default: 5 seconds)
 - `refetchOnMount` - Whether to refetch when component mounts (default: false)
 - `noCache` - Bypass cache entirely (default: false)
 
 #### **High Priority Enhancement Options**
+
 - `optimisticUpdates` - Enable optimistic updates (default: false)
 - `retryAttempts` - Number of retry attempts (default: 0)
 - `retryDelay` - Delay between retries in ms (default: 1000)
@@ -459,6 +493,7 @@ useEffect(() => {
 - `offlineSupport` - Enable offline support (default: false)
 
 #### **Medium Priority Enhancement Options**
+
 - `realtime` - Enable real-time subscriptions (default: false)
 - `subscriptionUrl` - WebSocket URL for real-time updates
 - `onUpdate` - Callback for real-time updates
@@ -469,6 +504,7 @@ useEffect(() => {
 - `onMetrics` - Callback for performance metrics
 
 ### `useUniversalInfiniteQuery` Options
+
 - `select` - Extract items from API response
 - `getNextPageParam` - Determine next page parameter
 - `getPreviousPageParam` - Determine previous page parameter (for bidirectional)
@@ -498,6 +534,7 @@ See the [User Documentation](./USER_DOCUMENTATION.md) for comprehensive examples
 Common issues and solutions:
 
 ### Data Not Updating
+
 ```typescript
 // Use appropriate stale time or manual refetch
 const { data, refetch } = useData('key', fetchFn, {
@@ -507,12 +544,14 @@ const { data, refetch } = useData('key', fetchFn, {
 ```
 
 ### Type Errors
+
 ```typescript
 // Provide explicit types
 const { data } = useData<User>('user', fetchUser);
 ```
 
 ### Memory Leaks
+
 The library handles request cancellation automatically with AbortController. Ensure proper cleanup in your fetch functions.
 
 ## 🤝 Contributing

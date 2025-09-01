@@ -66,17 +66,13 @@ export class OptimisticUpdateManager<T> {
     rollbackFn?: () => void
   ): Promise<void> {
     return new Promise(async (resolve, reject) => {
-      // Store original data for rollback
       this.originalData = currentData;
       this.isOptimistic = true;
-
       try {
-        // Execute mutation
         await mutationFn();
         this.isOptimistic = false;
         resolve();
       } catch (error) {
-        // Rollback on error
         if (rollbackFn) {
           rollbackFn();
         }
